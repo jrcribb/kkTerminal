@@ -1,23 +1,11 @@
 // 将 '/' 转为 '@'
 export const changeStr = (str) => {
-  let result = '';
-  for (let i = 0; i < str.length; i++) {
-    if(str[i] !== '/') result += str[i];
-    else result += '@';
-  }
-
-  return result;
+  return str.replace(/\//g, '@');
 };
 
 // 将 '@' 转为 '-'
 export const changeStr2 = (str) => {
-  let result = '';
-  for (let i = 0; i < str.length; i++) {
-    if(str[i] !== '@') result += str[i];
-    else result += '-';
-  }
-
-  return result;
+  return str.replace(/@/g, '-');
 };
 
 // 将Base64编码转换为合法的URL参数

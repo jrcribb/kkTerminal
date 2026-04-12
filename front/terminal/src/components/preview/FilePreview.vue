@@ -17,7 +17,7 @@
         </div>
       </template>
       <div style="margin-top: -28px;" ></div>
-      <div v-show="previewInfo.preview === 'editor'" class="kk-flex ellipsis no-select no-scrollbar" style="margin-bottom: 5px; overflow-x: auto; line-height: 22px;" >
+      <div v-show="previewInfo.preview === 'editor'" class="kk-flex ellipsis no-select no-scrollbar" style="margin-bottom: 5px; overflow-x: scroll !important; line-height: 22px;" >
         <div class="kk-flex" >
           <div>{{ $t('编码') }}</div>
           <div style="width: 15px;" >{{ $t('：') }}</div>

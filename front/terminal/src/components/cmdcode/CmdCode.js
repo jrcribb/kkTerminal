@@ -268,7 +268,7 @@ const filterRN = (arr) => {
 // 过滤 ANSI 等终端字符
 import stripAnsi from "strip-ansi";
 const filterANSI = (str) => {
-    // eslint-disable-next-line
+    // eslint-disable-next-line no-control-regex
     return stripAnsi(str).replace(/[\x00-\x1F\x7F]/g, '');
 };
 

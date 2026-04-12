@@ -45,8 +45,8 @@
           <img @click="doSettings(8)" src="@/assets/docker.svg" alt="docker" style="height: 18px;" >
         </div>
         <el-dropdown v-if="env.transport" @visible-change="changeDropdownShowStatus" class="bar-tab no-select" hide-timeout="300" trigger="click" >
-          <el-badge :hidden="isShowDropdown || !isShowDot" :is-dot="true" :offset="[0, 2]" >
-            <span @click="isShowDot = false;" ><img src="@/assets/transport.svg" alt="transport" style="height: 18px;" ></span>
+          <el-badge :hidden="isShowDropdown || !isShowDot" :is-dot="true" :offset="[0.8, 1.5]" >
+            <img @click="isShowDot = false;" src="@/assets/transport.svg" alt="transport" style="height: 16px;" >
           </el-badge>
           <template #dropdown>
             <el-card class="no-select" style="width: 512px;" :body-style="{padding: '5px 5px'}" >
@@ -209,8 +209,7 @@
       </div>
     </div>
     <!-- Terminal主体 -->
-    <div class="kk-flex terminal-class" :style="{backgroundColor: env.bg}" >
-      <div style="margin-left: 5px;" ></div>
+    <div class="kk-flex terminal-class" :style="{ backgroundColor: env.bg }" >
       <div ref="terminal" style="flex: 1;" ></div>
     </div>
   </div>
@@ -236,7 +235,7 @@
 
 <script>
 import browser from "@/utils/Browser";
-import { ref, onMounted, onUnmounted, getCurrentInstance } from "vue";
+import { ref, reactive, onMounted, onUnmounted, getCurrentInstance, createVNode, render } from "vue";
 import { secretKeyGetter, aesEncrypt, aesDecrypt, rsaEncrypt } from "@/utils/Encrypt";
 import { ElMessage } from "element-plus";
 
@@ -250,6 +249,7 @@ import { default_env } from "@/env/Env";
 import { http_base_url, ws_base_url } from "@/env/Base";
 import { changeStr, changeBase64Str, changeStrBase64, generateRandomString } from "@/utils/String";
 
+import ShellStatus from "@/components/shell/ShellStatus";
 import ConnectSetting from "@/components/connect/ConnectSetting";
 import PreferenceSetting from "@/components/preference/PreferenceSetting";
 import FileBlock from "@/components/file/FileBlock";
@@ -288,8 +288,9 @@ import { getChannel, messageDict } from "@/utils/Channel";
 import { localStore } from "@/env/Store";
 import NoData from "@/components/common/NoData";
 import ToolTip from "@/components/common/ToolTip";
-import FileIcons from "file-icons-vue";
 import setupCompatFixes from "@/utils/Compatibility";
+import FileIcons from "file-icons-vue";
+import PQueue from "p-queue";
 
 export default {
   name: 'TerminalView',
@@ -492,6 +493,7 @@ export default {
     let term = null;
     const initTerminal = () => {
       term = new Terminal({
+        allowProposedApi: true,                               // 启用实验性API
         convertEol: true,                                     // 设置光标为下一行开头
         scrollback: Number.MAX_SAFE_INTEGER,                  // 终端回滚量
         disableStdin: false,                                  // 是否禁用输入
@@ -524,12 +526,131 @@ export default {
         socket.value.send(aesEncrypt(JSON.stringify({type: 1, content: "", rows: newRows, cols: newCols}), secretKey.value));
       }
     };
-    // 终端写入
+
+    // 终端集成
+    const globalWriteQueue = new PQueue({ concurrency: 1 });
+    const markerItems = reactive({});
+    const lastMarkerId = ref(-1);
+    const lastCmdCounter = ref(-1);
     const termWrite = (content) => {
       if(content) {
         term.focus();
-        term.write(content);
+        globalWriteQueue.add(async () => {
+          const items = parseCustomAnsi(content);
+          for(const item of items) {
+            if(item.type === 'text') {
+              await new Promise((resolve, reject) => {
+                const promiseTimer = browser.setTimeout(() => {
+                  reject();
+                }, 3000);
+                term.write(item.content, () => {
+                  clearTimeout(promiseTimer);
+                  resolve();
+                });
+              });
+            }
+            else {
+              const marker = term.registerMarker(0);
+              markerItems[marker.id] = {
+                marker: marker,
+                data: reactive({
+                  id: marker.id,
+                  workDir: item.data.workDir,
+                }),
+              };
+              if(lastMarkerId.value !== -1) {
+                const lastMarkerItem = markerItems[lastMarkerId.value];
+                const isValid = item.data.cmdCounter === (lastCmdCounter.value + 1);
+                const updateData = {
+                  ...lastMarkerItem.data,
+                  exitCode: isValid ? item.data.exitCode : null,
+                  execCmd: isValid ? item.data.lastCmd : null,
+                  nextId: marker.id,
+                };
+                updateData.cmdOutput = isValid ? parseCmdOutput(updateData) : [];
+                Object.assign(lastMarkerItem.data, updateData);
+              }
+              lastMarkerId.value = marker.id;
+              lastCmdCounter.value = item.data.cmdCounter;
+              const decoration = term.registerDecoration({
+                marker: marker,
+                x: 0,
+              });
+              decoration.onRender((element) => {
+                const currentMarkerItem = markerItems[marker.id];
+                const vnode = createVNode(ShellStatus, {
+                  data: currentMarkerItem.data,
+                });
+                render(vnode, element);
+              });
+            }
+          }
+        });
       }
+    };
+    const parseCustomAnsi = (content) => {
+      // eslint-disable-next-line no-control-regex
+      const splitRegex = /(\x1b]666;\d+\|\d+\|[^|]+\|.*?\x1b\\)/g;
+      // eslint-disable-next-line no-control-regex
+      const payloadRegex = /\x1b]666;(.*?)\x1b\\/;
+      return content.split(splitRegex).filter(Boolean).map(part => {
+        const match = part.match(payloadRegex);
+        if(match) {
+          const index1 = match[1].indexOf('|');
+          const index2 = match[1].indexOf('|', index1 + 1);
+          const index3 = match[1].indexOf('|', index2 + 1);
+          return {
+            type: 'ansi',
+            data: {
+              cmdCounter: parseInt(match[1].substring(0, index1)),
+              exitCode: parseInt(match[1].substring(index1 + 1, index2)),
+              workDir: match[1].substring(index2 + 1, index3),
+              lastCmd: match[1].substring(index3 + 1),
+            },
+          };
+        }
+        return {
+          type: 'text',
+          content: part,
+        };
+      });
+    };
+    const parseCmdOutput = (data) => {
+      const termCols = term.cols;
+      const execCmd = data.execCmd;
+      const startLine = markerItems[data.id].marker.line;
+      const endLine = markerItems[data.nextId].marker.line - 1;
+      const cmdContents = getTermLinesContent(startLine, endLine);
+      let cmdInput = '';
+      for(let index = 0; index < cmdContents.length; index++) {
+        let content = cmdContents[index];
+        if(content.length < termCols && !content.endsWith('\\')) {
+          return cmdContents.slice(index + 1);
+        }
+        if(content.startsWith('> ') && index !== 0 && cmdContents[index - 1].endsWith('\\')) {
+          content = content.substring(2);
+        }
+        if(content.endsWith('\\')) {
+          cmdInput += content.substring(0, content.length - 1);
+        }
+        else {
+          cmdInput += content;
+          if(cmdInput.endsWith(execCmd)) {
+            return cmdContents.slice(index + 1);
+          }
+        }
+      }
+      return [];
+    };
+    const getTermLinesContent = (startLine, endLine) => {
+      const buffer = term.buffer.active;
+      const linesContent = [];
+      for(let i = startLine; i <= endLine; i++) {
+        const line = buffer.getLine(i);
+        if(line) linesContent.push(line.translateToString(true));
+        else linesContent.push('');
+      }
+      return linesContent;
     };
 
     // 协作
@@ -754,6 +875,11 @@ export default {
 
     // 重启终端
     const resetTerminal = () => {
+      Object.keys(markerItems).forEach((key) => {
+        delete markerItems[key];
+      });
+      lastMarkerId.value = -1;
+      lastCmdCounter.value = -1;
       if(term && terminal.value) {
         terminal.value.removeEventListener('contextmenu', doPaste);
         terminal.value.removeEventListener('compositionend', putChinese);
@@ -1244,6 +1370,8 @@ export default {
 .terminal-class {
   width: 100%;
   height: 100%;
+  padding-left: 16px;
+  cursor: text;
 }
 
 .setting {

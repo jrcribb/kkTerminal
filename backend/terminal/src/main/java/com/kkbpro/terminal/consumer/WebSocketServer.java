@@ -187,30 +187,55 @@ public class WebSocketServer {
         // 开启交互Shell和SFTP
         net.schmizz.sshj.connection.channel.direct.Session sshSession = this.sshClient.startSession();
         sshSession.allocatePTY("xterm-256color", envInfo.getCols(), envInfo.getRows(), 0, 0, Collections.emptyMap());
-        this.shell = (net.schmizz.sshj.connection.channel.direct.Session.Shell) sshSession.exec("exec -a -bash /bin/bash -il");
+        // 终端集成脚本
+        String shellIntegrationScript = """
+                export PS2="> "
+
+                __kkterminal_lastcmd=""
+                __kkterminal_counter=1
+
+                __kkterminal_prompt() {
+                  local exit_code=$?
+                  printf "\\e]666;%s|%s|%s|%s\\e\\\\" "${__kkterminal_counter}" "${exit_code}" "$(pwd)" "${__kkterminal_lastcmd}"
+                }
+
+                export PROMPT_COMMAND="__kkterminal_prompt"
+                __kkterminal_prompt
+
+                trap '
+                if [[ "$BASH_COMMAND" != "__kkterminal_prompt" ]]; then
+                  __kkterminal_lastcmd=$BASH_COMMAND
+                  ((__kkterminal_counter++))
+                fi
+                ' DEBUG
+                """;
+        String shellIntegrationScriptBase64 = Base64.getEncoder().encodeToString(shellIntegrationScript.getBytes());
+        String PROMPT_COMMAND = "export PROMPT_COMMAND='eval \"$(echo " + shellIntegrationScriptBase64 + " | base64 -d)\"'; ";
+        this.shell = (net.schmizz.sshj.connection.channel.direct.Session.Shell) sshSession.exec(PROMPT_COMMAND + "exec -a -bash /bin/bash -il");
         this.sftpClient = this.sshClient.newSFTPClient();
 
         // 生成sshKey
-        this.sshKey = envInfo.getLang() + "-" + this.serverCharset.name().replace("-","@") + "-" + UUID.randomUUID();
+        this.sshKey = envInfo.getLang() + "-" + this.serverCharset.name().replace("-", "@") + "-" + UUID.randomUUID();
         this.sendMessage("SSHKey", ResultStatusEnum.SUCCESS.getStatus(),
                 SocketSendEnum.CONNECT_SUCCESS.getType(), this.sshKey);
         webSocketServerMap.put(this.sshKey, this);
         fileTransportingMap.put(this.sshKey, new ConcurrentHashMap<>());
+
+        StringBuilder termConnectMsg = new StringBuilder();
         // 欢迎语
-        this.sendMessage("Welcome", ResultStatusEnum.SUCCESS.getStatus(),
-                SocketSendEnum.OUT_TEXT.getType(), appConfig.getWelcome() + "\r\n");
+        termConnectMsg.append(appConfig.getWelcome()).append("\r\n");
         // github源地址
-        this.sendMessage("GitHub", ResultStatusEnum.SUCCESS.getStatus(),
-                SocketSendEnum.OUT_TEXT.getType(), appConfig.getSource() + "\r\n");
+        termConnectMsg.append(appConfig.getSource()).append("\r\n");
         // 生成横幅艺术字
         String banner = appConfig.getBanner();
         String bannerArt = FigletFont.convertOneLine(banner);
         // 分割成多行
         String[] asciiArts = bannerArt.split("\n");
         for (String asciiArt : asciiArts) {
-            this.sendMessage("BannerArtLine", ResultStatusEnum.SUCCESS.getStatus(),
-                    SocketSendEnum.OUT_TEXT.getType(), asciiArt + "\r\n");
+            termConnectMsg.append(asciiArt).append("\r\n");
         }
+        this.sendMessage("Message", ResultStatusEnum.SUCCESS.getStatus(),
+                SocketSendEnum.OUT_TEXT.getType(), termConnectMsg.toString());
 
         this.shellInputStream = this.shell.getInputStream();
         this.shellOutputStream = this.shell.getOutputStream();
@@ -219,14 +244,14 @@ public class WebSocketServer {
             int len;
             try {
                 while ((len = this.shellInputStream.read(buffer)) != -1) {
-                    String shellOut = new String(buffer, 0, len, this.serverCharset);
-                    this.sendMessage("ShellOut", ResultStatusEnum.SUCCESS.getStatus(),
-                            SocketSendEnum.OUT_TEXT.getType(), shellOut);
+                    String shellOutput = new String(buffer, 0, len, this.serverCharset);
+                    this.sendMessage("shellOutput", ResultStatusEnum.SUCCESS.getStatus(),
+                            SocketSendEnum.OUT_TEXT.getType(), shellOutput);
                     List<WebSocketServer> slaveSockets = cooperateMap.get(this.sshKey);
                     if (slaveSockets != null) {
                         for (WebSocketServer slaveSocket : slaveSockets) {
-                            slaveSocket.sendMessage("ShellOut", ResultStatusEnum.SUCCESS.getStatus(),
-                                    SocketSendEnum.OUT_TEXT.getType(), shellOut);
+                            slaveSocket.sendMessage("shellOutput", ResultStatusEnum.SUCCESS.getStatus(),
+                                    SocketSendEnum.OUT_TEXT.getType(), shellOutput);
                         }
                     }
                 }

@@ -1,8 +1,10 @@
 <template>
-  <el-icon v-if="statusType === -2" :style="statusStyle" ><CircleCloseFilled /></el-icon>
-  <el-icon v-else-if="statusType === -1" :style="statusStyle" ><WarningFilled /></el-icon>
-  <el-icon v-else-if="statusType === 1" :style="statusStyle" ><SuccessFilled /></el-icon>
-  <el-icon v-else :style="statusStyle" ><InfoFilled /></el-icon>
+  <el-icon :style="statusStyle" >
+    <CircleCloseFilled v-if="statusType === -2" />
+    <WarningFilled v-else-if="statusType === -1" />
+    <SuccessFilled v-else-if="statusType === 1" />
+    <InfoFilled v-else />
+  </el-icon>
 </template>
 
 <script>
@@ -51,13 +53,13 @@ export default {
       return {
         fontSize: '16px',
         ...props.style,
-        color: statusColor[(statusTypeDict[props.status] || 0) + 2],
+        color: statusColor[statusType.value + 2],
       }
     });
 
     return {
-      statusStyle,
       statusType,
+      statusStyle,
     }
   }
 }
