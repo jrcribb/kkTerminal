@@ -121,7 +121,7 @@
             </div>
           </div>
         </div>
-        <div id="fileArea" ref="fileAreaRef" :element-loading-text="$t('加载中...')" v-loading="loading" class="list-class no-select"
+        <div id="fileArea" ref="fileAreaRef" :element-loading-text="$t('加载中...')" v-loading="loading" class="list-class no-select" :style="{ borderBottom: files.length <= 6 ? '1px solid #efefef' : '' }"
              @contextmenu="handleContextMenu" @click="handleClick"
              @scroll="handleScroll" @dragover="stopEvent" @drop="handleFileDrag"
              tabindex="0" @keydown="handleShortcutKeys" >
@@ -160,11 +160,13 @@
             </div>
           </div>
           <div v-else>
-            <NoData height="248px" @contextmenu="selectedFiles = []" v-if="!loading" :msg="noDataMsg" ></NoData>
+            <NoData height="247px" @contextmenu="selectedFiles = []" v-if="!loading" :msg="noDataMsg" ></NoData>
           </div>
         </div>
       </div>
-      <div style="margin-top: -12px;" ></div>
+      <div class="ellipsis" >
+        <el-checkbox v-model="isFollowTermDir" @change="changeFollowTermDir" :label="$t('跟随终端工作目录')" size="small" />
+      </div>
     </el-dialog>
   </div>
 
@@ -335,12 +337,16 @@ export default {
 
     const dir = ref('');
     const dirLevels = ref([]);
-    // 保证路径正确
+    // 保证路径格式正确
+    const confirmPathCorrect = (path) => {
+      let correctPath = path;
+      if(!correctPath) correctPath = homeDir.value;
+      if(!correctPath.startsWith('/')) correctPath = '/' + correctPath;
+      if(!correctPath.endsWith('/')) correctPath = correctPath + '/';
+      return correctPath.replace(/\/{2,}/g, '/');
+    };
     const confirmDirCorrect = () => {
-      if(dir.value === '') dir.value = homeDir.value;
-      if(dir.value[0] !== '/') dir.value = '/' + dir.value;
-      if(dir.value[dir.value.length - 1] !== '/') dir.value = dir.value + '/';
-      dir.value = dir.value.replace(/\/{2,}/g, '/');
+      dir.value = confirmPathCorrect(dir.value);
       // 更新路径显示
       calcDirLevel(dir.value);
     };
@@ -358,6 +364,24 @@ export default {
       aimDir += '/';
       if(change) changeDir(aimDir);
       return aimDir;
+    };
+
+    // 工作目录
+    const workDir = ref('');
+    const updateCommandsList = ["touch", "mkdir", "rm", "rmdir", "mv", "rename"];
+    const updateWorkDir = (value, command) => {
+      workDir.value = confirmPathCorrect(value);
+      if(!isFollowTermDir.value) return;
+      command = command.split(' ').filter(Boolean)[0];
+      if(workDir.value !== dir.value || updateCommandsList.includes(command)) {
+        changeDir(workDir.value, false);
+      }
+    };
+    const isFollowTermDir = ref(false);
+    const changeFollowTermDir = () => {
+      if(isFollowTermDir.value) {
+        updateWorkDir(workDir.value, '');
+      }
     };
 
     // 获取初始家目录
@@ -447,7 +471,7 @@ export default {
     // ls所有文件
     const dirStatus = ref(0);   // 目录状态: 0 正常 / 1 目录不存在、无权限等
     const noDataMsg = ref(i18n.global.k('暂无文件'));
-    const getDirList = async () => {
+    const getDirList = async (focus=true) => {
       if(!dir.value) {
         getHomeDir();
         return;
@@ -474,10 +498,12 @@ export default {
               noDataMsg.value = i18n.global.k('暂无文件');
               dirStatus.value = 0;
               lastSelectedIndex = -1;
-              browser.setTimeout(() => {
-                fileAreaRef.value.tabindex = '0';
-                fileAreaRef.value.focus();
-              }, 1);
+              if(focus) {
+                browser.setTimeout(() => {
+                  fileAreaRef.value.tabindex = '0';
+                  fileAreaRef.value.focus();
+                }, 1);
+              }
               if(resp.data.fileName) preViewFile(resp.data.fileName);
               if(fileAttrRef.value && fileAttrRef.value.DialogVisible) {
                 const currentFileInfo = getFileInfoByName(fileAttrRef.value.fileInfo.name);
@@ -498,10 +524,12 @@ export default {
               noDataMsg.value = resp.info;
               dirStatus.value = 1;
               lastSelectedIndex = -1;
-              browser.setTimeout(() => {
-                fileAreaRef.value.tabindex = '0';
-                fileAreaRef.value.focus();
-              }, 1);
+              if(focus) {
+                browser.setTimeout(() => {
+                  fileAreaRef.value.tabindex = '0';
+                  fileAreaRef.value.focus();
+                }, 1);
+              }
             }
             loading.value = false;
           }
@@ -547,18 +575,18 @@ export default {
     };
 
     // 更新目录路径
-    const changeDir = (new_dir) => {
+    const changeDir = (new_dir, focus=true) => {
       if(isShowDirInput.value) return;
       dir.value = new_dir;
-      dirInputCallback();
+      dirInputCallback(focus);
     };
 
     // 更改路径回调
-    const dirInputCallback = () => {
+    const dirInputCallback = (focus=true) => {
       isShowDirInput.value = false;
       confirmDirCorrect();
       selectedFiles.value = [];
-      getDirList();
+      getDirList(focus);
       browser.setTimeout(() => {
         const element = document.querySelector('#dirLevelBar');
         if(element) element.scrollLeft = element.scrollWidth;
@@ -1395,6 +1423,8 @@ export default {
         files.value = [];
         dir.value = '';
         homeDir.value = '';
+        workDir.value = '';
+        isFollowTermDir.value = false;
         folderLoading.value = true;
         folderItems.value = [];
         folderDir.value = '';
@@ -1471,6 +1501,9 @@ export default {
       DialogVisible,
       isShowDirInput,
       confirmDirCorrect,
+      updateWorkDir,
+      isFollowTermDir,
+      changeFollowTermDir,
       dir,
       files,
       getHomeDir,

@@ -43,7 +43,7 @@ export default {
       'Execute Success': 1,
     };
 
-    const statusColor = ['#f56c6c','#e6a23c','#909399','#67c23a'];
+    const statusColor = ['#f56c6c', '#e6a23c', '#909399', '#67c23a'];
 
     const statusType = computed(() => {
       return statusTypeDict[props.status] || 0;
@@ -65,5 +65,5 @@ export default {
 }
 </script>
 
-<style>
+<style scoped>
 </style>

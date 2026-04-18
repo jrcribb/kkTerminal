@@ -106,7 +106,7 @@
       </div>
     </div>
     <div class="error-text no-select" > {{ $t(err_msg) }} </div>
-    <div style="margin-bottom: 5px;" ></div>
+    <div style="margin-bottom: 15px;" ></div>
     <div style="display: flex; border-top: 1px solid #f1f2f4;" >
       <el-checkbox v-if="setInfo.option && setInfo.option.length > 0" v-model="isNewWindow" :label="$t('新窗口打开')" size="small" style="margin-top: 10px;" />
       <div style="flex: 1;" ></div>

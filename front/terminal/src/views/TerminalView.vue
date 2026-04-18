@@ -508,7 +508,7 @@ export default {
         },
         lineHeight: 1.2,                                      // 文本行高
         fontFamily: env.value.fontFamily,                     // 字体(默认Courier New)
-        fontSize: env.value.fontSize,                         // 字号(默认16)
+        fontSize: env.value.fontSize,                         // 字号(默认18)
       });
       term.loadAddon(fitAddon);
       term.loadAddon(webLinksAddon);
@@ -533,60 +533,66 @@ export default {
     const lastMarkerId = ref(-1);
     const lastCmdCounter = ref(-1);
     const termWrite = (content) => {
-      if(content) {
-        term.focus();
-        globalWriteQueue.add(async () => {
-          const items = parseCustomAnsi(content);
-          for(const item of items) {
-            if(item.type === 'text') {
-              await new Promise((resolve, reject) => {
-                const promiseTimer = browser.setTimeout(() => {
-                  reject();
-                }, 3000);
-                term.write(item.content, () => {
-                  clearTimeout(promiseTimer);
-                  resolve();
-                });
+      if(!content) return;
+      term.options.cursorBlink = env.value.cursorBlink;
+      term.focus();
+      globalWriteQueue.add(async () => {
+        const items = parseCustomAnsi(content);
+        for(const item of items) {
+          if(item.type === 'text') {
+            await new Promise((resolve, reject) => {
+              const promiseTimer = browser.setTimeout(() => {
+                reject();
+              }, 3000);
+              term.write(item.content, () => {
+                clearTimeout(promiseTimer);
+                resolve();
               });
-            }
-            else {
-              const marker = term.registerMarker(0);
-              markerItems[marker.id] = {
-                marker: marker,
-                data: reactive({
-                  id: marker.id,
-                  workDir: item.data.workDir,
-                }),
-              };
-              if(lastMarkerId.value !== -1) {
-                const lastMarkerItem = markerItems[lastMarkerId.value];
-                const isValid = item.data.cmdCounter === (lastCmdCounter.value + 1);
-                const updateData = {
-                  ...lastMarkerItem.data,
-                  exitCode: isValid ? item.data.exitCode : null,
-                  execCmd: isValid ? item.data.lastCmd : null,
-                  nextId: marker.id,
-                };
-                updateData.cmdOutput = isValid ? parseCmdOutput(updateData) : [];
-                Object.assign(lastMarkerItem.data, updateData);
-              }
-              lastMarkerId.value = marker.id;
-              lastCmdCounter.value = item.data.cmdCounter;
-              const decoration = term.registerDecoration({
-                marker: marker,
-                x: 0,
-              });
-              decoration.onRender((element) => {
-                const currentMarkerItem = markerItems[marker.id];
-                const vnode = createVNode(ShellStatus, {
-                  data: currentMarkerItem.data,
-                });
-                render(vnode, element);
-              });
-            }
+            });
           }
-        });
-      }
+          else {
+            const marker = term.registerMarker(0);
+            markerItems[marker.id] = {
+              marker: marker,
+              data: reactive({
+                id: marker.id,
+                workDir: item.data.workDir,
+              }),
+            };
+            if(lastMarkerId.value !== -1) {
+              const lastMarkerItem = markerItems[lastMarkerId.value];
+              const isValid = item.data.cmdCounter === (lastCmdCounter.value + 1);
+              const updateData = {
+                ...lastMarkerItem.data,
+                exitCode: isValid ? item.data.exitCode : null,
+                execCmd: isValid ? item.data.lastCmd : null,
+                nextId: marker.id,
+              };
+              updateData.cmdOutput = isValid ? parseCmdOutput(updateData) : [];
+              Object.assign(lastMarkerItem.data, updateData);
+              if(isValid && fileBlockRef.value) {
+                fileBlockRef.value.updateWorkDir(item.data.workDir, lastMarkerItem.data.exitCode === 0 ? lastMarkerItem.data.execCmd : '');
+              }
+            }
+            lastMarkerId.value = marker.id;
+            lastCmdCounter.value = item.data.cmdCounter;
+            const decoration = term.registerDecoration({
+              marker: marker,
+              x: 0,
+            });
+            decoration.onRender((element) => {
+              const currentMarkerItem = markerItems[marker.id];
+              const vnode = createVNode(ShellStatus, {
+                data: currentMarkerItem.data,
+                onHandleMenuSelect: (type, data) => {
+                  handleMenuSelect(type, data);
+                },
+              });
+              render(vnode, element);
+            });
+          }
+        }
+      });
     };
     const parseCustomAnsi = (content) => {
       // eslint-disable-next-line no-control-regex
@@ -621,16 +627,17 @@ export default {
       const startLine = markerItems[data.id].marker.line;
       const endLine = markerItems[data.nextId].marker.line - 1;
       const cmdContents = getTermLinesContent(startLine, endLine);
+      const cmdRows = cmdContents.length;
       let cmdInput = '';
-      for(let index = 0; index < cmdContents.length; index++) {
+      for(let index = 0; index < cmdRows; index++) {
         let content = cmdContents[index];
         if(content.length < termCols && !content.endsWith('\\')) {
           return cmdContents.slice(index + 1);
         }
-        if(content.startsWith('> ') && index !== 0 && cmdContents[index - 1].endsWith('\\')) {
+        if(content.startsWith('> ') && index > 0 && cmdContents[index - 1].endsWith('\\')) {
           content = content.substring(2);
         }
-        if(content.endsWith('\\')) {
+        if(content.endsWith('\\') && index < cmdRows - 1 && cmdContents[index + 1].startsWith('> ')) {
           cmdInput += content.substring(0, content.length - 1);
         }
         else {
@@ -651,6 +658,30 @@ export default {
         else linesContent.push('');
       }
       return linesContent;
+    };
+    const handleMenuSelect = (type, data) => {
+      switch (type) {
+        // 重新运行此命令
+        case 1:
+          term.scrollToBottom();
+          sendMessage(data.execCmd + '\n');
+          break;
+        // 复制此命令
+        case 2:
+          browser.navigator.clipboard.writeText(data.execCmd);
+          break;
+        // 复制命令输出
+        case 3:
+          browser.navigator.clipboard.writeText(data.cmdOutput.join('\n'));
+          break;
+        // 打开运行目录
+        case 4:
+          fileBlockRef.value.DialogVisible = true;
+          fileBlockRef.value.changeDir(data.workDir);
+          break;
+        default:
+          break;
+      }
     };
 
     // 协作

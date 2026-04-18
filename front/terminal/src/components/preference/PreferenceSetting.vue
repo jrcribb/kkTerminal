@@ -156,7 +156,13 @@ export default {
     const DialogVisible = ref(false);
 
     // 语言列表
-    const langList = [{label:"English",value:"en"}, {label:i18n.global.k("简体中文"),value:"zh"}];
+    const langList = [{
+      label: "English",
+      value: "en",
+    }, {
+      label: i18n.global.k("简体中文"),
+      value: "zh",
+    }];
     const mapValueToLabel = (lang) => {
       const item = langList.find(item => item.value === lang);
       return item ? item.label : "English";
@@ -164,18 +170,15 @@ export default {
 
     // 字体列表
     const fontFamilyList = computed(() => {
-      if(props.os === "Windows") {
-        return ['Courier New','Consolas','Monospace','Lucida Console'];
+      if(props.os === "Mac" || props.os === "iOS") {
+        return ['Courier New', 'Menlo', 'Monaco', 'Courier'];
       }
-      else if(props.os === "Mac" || props.os === "iOS") {
-        return ['Courier New','Menlo','Monaco','Courier'];
-      }
-      else return ['Courier New','Consolas','Monospace','Lucida Console'];
+      return ['Courier New', 'Consolas', 'Monospace', 'Lucida Console'];
     });
     // 字号列表
-    const fontSizeList = [12,14,16,18,20];
+    const fontSizeList = [14, 16, 18, 20, 22];
     // 光标样式列表
-    const cursorStyleList = ['block','underline','bar'];
+    const cursorStyleList = ['block', 'underline', 'bar'];
 
     // 设置信息
     const setInfo = ref({
@@ -192,7 +195,7 @@ export default {
       transport: props.env.transport,
     });
     const confirm = () => {
-      context.emit('callback',setInfo.value);
+      context.emit('callback', setInfo.value);
       closeDialog();
     };
 

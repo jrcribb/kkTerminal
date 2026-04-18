@@ -1,13 +1,21 @@
 <template>
   <div class="decoration-wrapper" >
-    <CircleCloseFilled v-if="statusType === -1" :style="statusStyle" />
-    <SuccessFilled v-else-if="statusType === 1" :style="statusStyle" />
+    <CircleCloseFilled v-if="statusType === -1" @click="isShowMenu = true;" @mouseleave="showMenu(false)" :style="statusStyle" />
+    <SuccessFilled v-else-if="statusType === 1" @click="isShowMenu = true;" @mouseleave="showMenu(false)" :style="statusStyle" />
     <Remove v-else :style="statusStyle" />
+    <div v-if="isShowMenu" @mousemove="showMenu(true)" @mouseleave="showMenu(false)" class="kk-menu no-select" :style="{ width: i18n.global.t('130') + 'px' }" >
+      <div @click="handleMenuSelect(1)" style="border-bottom: 1px solid #ddd;" class="kk-menu-item" key="1" >{{ i18n.global.t('重新运行此命令') }}</div>
+      <div @click="handleMenuSelect(2)" class="kk-menu-item" key="2" >{{ i18n.global.t('复制此命令') }}</div>
+      <div @click="handleMenuSelect(3)" style="border-bottom: 1px solid #ddd;" class="kk-menu-item" key="3" >{{ i18n.global.t('复制命令输出') }}</div>
+      <div @click="handleMenuSelect(4)" class="kk-menu-item" key="4" >{{ i18n.global.t('打开运行目录') }}</div>
+    </div>
   </div>
 </template>
 
 <script>
-import { computed } from "vue";
+import { ref, computed } from "vue";
+import i18n from "@/locales/i18n";
+import browser from "@/utils/Browser";
 import {
   SuccessFilled,
   CircleCloseFilled,
@@ -27,9 +35,9 @@ export default {
       default: (() => {}),
     },
   },
-  setup(props) {
+  setup(props, context) {
 
-    const statusColor = ['#f53f3f','#73767a','#00b42a'];
+    const statusColor = ['#f53f3f', '#73767a', '#00b42a'];
 
     const statusType = computed(() => {
       if(props.data.exitCode === 0) return 1;
@@ -45,9 +53,29 @@ export default {
       }
     });
 
+    const isShowMenu = ref(false);
+    let timer = null;
+    const showMenu = (newVal) => {
+      clearTimeout(timer);
+      if(isShowMenu.value !== newVal) {
+        timer = browser.setTimeout(() => {
+          isShowMenu.value = newVal;
+        }, 400);
+      }
+    };
+    const handleMenuSelect = (type) => {
+      context.emit('handleMenuSelect', type, props.data);
+      clearTimeout(timer);
+      isShowMenu.value = false;
+    };
+
     return {
+      i18n,
       statusType,
       statusStyle,
+      isShowMenu,
+      showMenu,
+      handleMenuSelect,
     }
   }
 }
@@ -56,6 +84,33 @@ export default {
 <style scoped>
 .decoration-wrapper {
   position: relative;
+}
+
+.kk-menu {
+  position: absolute;
+  top: 0;
+  left: 16px;
+  z-index: 3466;
+  text-align: left;
+  border-radius: 8px;
+  border-top: 8px solid #f2f2f2;
+  border-bottom: 8px solid #f2f2f2;
+  box-shadow: 0 6px 12px 0 rgba(0, 0, 0, 0.15), 0 3px 6px -2px rgba(0, 0, 0, 0.2), 0 8px 16px 4px rgba(0, 0, 0, 0.12);
+}
+
+.kk-menu-item {
+  background-color: #f2f2f2;
+  padding-left: 10px;
+  width: 100%;
+  height: 30px;
+  line-height: 30px;
+  font-size: 13px;
+  color: #383838;
+  cursor: pointer;
+}
+
+.kk-menu-item:hover {
+  background-color: #91c9f7;
 }
 </style>
 

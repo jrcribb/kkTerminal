@@ -12,7 +12,7 @@ export const default_env = {
   bg: '#000000',
   fg: '#ffffff',
   fontFamily: 'Courier New',
-  fontSize: 16,
+  fontSize: 18,
   cursorStyle: 'block',
   cursorBlink: true,
   // 功能相关
