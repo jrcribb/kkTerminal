@@ -27,6 +27,9 @@ const browser = {
         getItem(key) {
             return window.sessionStorage.getItem(key);
         },
+        removeItem(key) {
+            window.sessionStorage.removeItem(key);
+        },
     },
     setTimeout(handler, timeout, ...args) {
         return window.setTimeout(handler, timeout, ...args);

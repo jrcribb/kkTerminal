@@ -165,7 +165,7 @@
         </div>
       </div>
       <div class="ellipsis" >
-        <el-checkbox v-model="isFollowTermDir" @change="changeFollowTermDir" :label="$t('跟随终端工作目录')" size="small" />
+        <el-checkbox v-model="isFollowTermDir" @change="changeFollowTermDir" :label="$t('跟随终端目录')" size="small" />
       </div>
     </el-dialog>
   </div>
@@ -234,7 +234,7 @@ import { escapeItem, escapePath, osFileNaturalSort } from "@/utils/String";
 import { isZipFile } from "@/components/preview/FileSuffix";
 import { getChmodValue } from "@/components/calc/CalcPriority";
 import { getUrlParams, doUrlDownload } from "@/utils/Url";
-import { CmdCodeReservedVarsSetter } from "@/components/cmdcode/CmdCode";
+import { CmdCodeReservedVarsHelper } from "@/components/cmdcode/CmdCode";
 
 import ToolTip from "@/components/common/ToolTip";
 import NoData from "@/components/common/NoData";
@@ -371,6 +371,8 @@ export default {
     const updateCommandsList = ["touch", "mkdir", "rm", "rmdir", "mv", "rename"];
     const updateWorkDir = (value, command) => {
       workDir.value = confirmPathCorrect(value);
+      // 预留值
+      CmdCodeReservedVarsHelper.set('wdir', workDir.value);
       if(!isFollowTermDir.value) return;
       command = command.split(' ').filter(Boolean)[0];
       if(workDir.value !== dir.value || updateCommandsList.includes(command)) {
@@ -406,7 +408,7 @@ export default {
             files.value = [];
             getDirList();
             // 预留值
-            CmdCodeReservedVarsSetter('home', homeDir.value);
+            CmdCodeReservedVarsHelper.set('home', homeDir.value);
           }
           else {
             noDataMsg.value = resp.info;
@@ -1018,8 +1020,29 @@ export default {
     const handleContextMenu = (event) => {
       // 右键点击空白处
       if(event.target.id === 'fileArea') selectedFiles.value = [];
-      menuBlockRef.value.style.top = event.clientY - 135 + 'px';
-      menuBlockRef.value.style.left = event.clientX + 1 + 'px';
+      const clientY = event.clientY;
+      let menuTop = clientY - 135;
+      const viewportHeight = window.innerHeight;
+      const menuHeight = 8 * 2 + 30 * 8;
+      // 超出上边界
+      if(clientY - 135 < 0) {
+        menuTop = 0;
+      }
+      // 超出下边界
+      if(clientY + menuHeight - 135 > viewportHeight) {
+        menuTop = viewportHeight - menuHeight;
+      }
+      menuBlockRef.value.style.top = menuTop + 'px';
+
+      const clientX = event.clientX;
+      let menuLeft = clientX + 1;
+      const viewportWidth = window.innerWidth;
+      const menuWidth = 110;
+      // 超出右边界
+      if(clientX + 1 + menuWidth > viewportWidth) {
+        menuLeft = clientX - 1 - menuWidth;
+      }
+      menuBlockRef.value.style.left = menuLeft + 'px';
       isShowMenu.value = true;
       isShowPop.value = false;
       stopEvent(event);
@@ -1133,7 +1156,7 @@ export default {
       if(fileUrlRef.value) fileUrlRef.value.closeDialog();
       if(fileAttrRef.value) fileAttrRef.value.closeDialog();
       // 预留值
-      CmdCodeReservedVarsSetter('dir', newVal);
+      CmdCodeReservedVarsHelper.set('fdir', newVal);
     });
 
     // 滚动到可视区

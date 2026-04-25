@@ -60,7 +60,7 @@
                     <el-icon @click="gotoOverview" style="margin-right: 10px; cursor: pointer; font-size: 16px;" ><ArrowLeft /></el-icon>
                     <div> {{ modifyTag + currentCmdCode }} </div>
                     <div style="margin-left: 10px;" ></div>
-                    <el-tooltip :content="CmdCodeStatusEnum[userCmdCodes[currentCmdCode].status]" placement="top" :show-after="300" >
+                    <el-tooltip :content="CmdCodeStatusEnum[userCmdCodes[currentCmdCode].status].desc" placement="top" :show-after="300" >
                       <CmdCodeStatus :style="{fontSize: '18px', cursor: 'pointer'}" :status="userCmdCodes[currentCmdCode].status" ></CmdCodeStatus>
                     </el-tooltip>
                     <div style="flex: 1;" ></div>
@@ -101,7 +101,7 @@
                       </ToolTip>
                       <div style="flex: 1;" ></div>
                       <div style="margin-left: 10px;" ></div>
-                      <el-tooltip :content="CmdCodeStatusEnum[item.status]" placement="top" :show-after="300" >
+                      <el-tooltip :content="CmdCodeStatusEnum[item.status].desc" placement="top" :show-after="300" >
                         <CmdCodeStatus :style="{fontSize: '18px', cursor: 'pointer'}" :status="item.status" ></CmdCodeStatus>
                       </el-tooltip>
                       <el-icon @click="gotoWorkflow(key)" style="margin-left: 15px; cursor: pointer; font-size: 16px;" ><ArrowRight /></el-icon>

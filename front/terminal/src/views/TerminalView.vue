@@ -274,7 +274,7 @@ import {
   SysCmdCode,
   UserCmdCodeExecutor,
   UserCmdCodeHelper,
-  CmdCodeReservedVarsSetter,
+  CmdCodeReservedVarsHelper,
   historyCmdCode,
 } from "@/components/cmdcode/CmdCode";
 
@@ -471,7 +471,7 @@ export default {
       if(!env.value.lang) env.value.lang = 'en';
       i18n.global.locale = env.value.lang;
       // 预留值
-      CmdCodeReservedVarsSetter('option', env.value.option);
+      CmdCodeReservedVarsHelper.set('option', env.value.option);
     };
     loadEnv();
 
@@ -573,6 +573,9 @@ export default {
               if(isValid && fileBlockRef.value) {
                 fileBlockRef.value.updateWorkDir(item.data.workDir, lastMarkerItem.data.exitCode === 0 ? lastMarkerItem.data.execCmd : '');
               }
+              if(UserCmdCodeHelper.active && UserCmdCodeHelper.resolve) {
+                UserCmdCodeHelper.resolve([...lastMarkerItem.data.cmdOutput]);
+              }
             }
             lastMarkerId.value = marker.id;
             lastCmdCounter.value = item.data.cmdCounter;
@@ -669,10 +672,22 @@ export default {
         // 复制此命令
         case 2:
           browser.navigator.clipboard.writeText(data.execCmd);
+          ElMessage({
+            message: i18n.global.t('复制成功'),
+            type: 'success',
+            grouping: true,
+            repeatNum: Number.MIN_SAFE_INTEGER,
+          });
           break;
         // 复制命令输出
         case 3:
           browser.navigator.clipboard.writeText(data.cmdOutput.join('\n'));
+          ElMessage({
+            message: i18n.global.t('复制成功'),
+            type: 'success',
+            grouping: true,
+            repeatNum: Number.MIN_SAFE_INTEGER,
+          });
           break;
         // 打开运行目录
         case 4:
@@ -782,7 +797,6 @@ export default {
         // 输出
         else if(result.code === 1) {
           const output = aesDecrypt(result.data, secretKey.value);
-          if(UserCmdCodeHelper.active) UserCmdCodeHelper.outArray.push(output);
           if(recording.value) {
             recordInfo.value.push({
               time: new Date().getTime(),
@@ -965,6 +979,8 @@ export default {
         currentConnectStatus.value = connectStatusDict.value['Connecting'];
         sshKey.value = '';
         if(socket.value) socket.value.close(3333);  // 主动释放资源，必需
+        // 清除预留值
+        CmdCodeReservedVarsHelper.clean();
         // 进行重启
         closeBlock();
         resetTerminal();
@@ -1095,7 +1111,7 @@ export default {
             } catch (error) {
               setCmdCodeStatus(transCmdCode, 'Compile Error');
               ElMessage({
-                message: i18n.global.t('命令代码') + ' ' + transCmdCode + ' ' + i18n.global.t('编译错误：') + error,
+                message: i18n.global.t('命令代码') + ' ' + transCmdCode + ' ' + i18n.global.t('编译错误 — ') + error,
                 type: 'error',
                 grouping: true,
               });
@@ -1119,7 +1135,7 @@ export default {
             setCmdCodeStatus(transCmdCode, 'Execute Success');
           } catch(error) {
             ElMessage({
-              message: i18n.global.t('命令代码') + ' ' + transCmdCode + ' ' + i18n.global.t('执行中断：') + error,
+              message: i18n.global.t('命令代码') + ' ' + transCmdCode + ' ' + i18n.global.t('执行中断 — ') + error,
               type: 'warning',
               grouping: true,
             });

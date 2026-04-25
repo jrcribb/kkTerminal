@@ -1,9 +1,9 @@
 <template>
-  <div class="decoration-wrapper" >
-    <CircleCloseFilled v-if="statusType === -1" @click="isShowMenu = true;" @mouseleave="showMenu(false)" :style="statusStyle" />
-    <SuccessFilled v-else-if="statusType === 1" @click="isShowMenu = true;" @mouseleave="showMenu(false)" :style="statusStyle" />
+  <div ref="decorationWrapperRef" class="decoration-wrapper" >
+    <CircleCloseFilled v-if="statusType === -1" @click="clickDecoration" @mouseleave="showMenu(false)" :style="statusStyle" />
+    <SuccessFilled v-else-if="statusType === 1" @click="clickDecoration" @mouseleave="showMenu(false)" :style="statusStyle" />
     <Remove v-else :style="statusStyle" />
-    <div v-if="isShowMenu" @mousemove="showMenu(true)" @mouseleave="showMenu(false)" class="kk-menu no-select" :style="{ width: i18n.global.t('130') + 'px' }" >
+    <div ref="decorationMenuRef" v-if="isShowMenu" @mousemove="showMenu(true)" @mouseleave="showMenu(false)" class="kk-menu no-select" :style="{ width: i18n.global.t('130') + 'px', top: menuTop + 'px' }" >
       <div @click="handleMenuSelect(1)" style="border-bottom: 1px solid #ddd;" class="kk-menu-item" key="1" >{{ i18n.global.t('重新运行此命令') }}</div>
       <div @click="handleMenuSelect(2)" class="kk-menu-item" key="2" >{{ i18n.global.t('复制此命令') }}</div>
       <div @click="handleMenuSelect(3)" style="border-bottom: 1px solid #ddd;" class="kk-menu-item" key="3" >{{ i18n.global.t('复制命令输出') }}</div>
@@ -54,6 +54,17 @@ export default {
     });
 
     const isShowMenu = ref(false);
+    const decorationWrapperRef = ref();
+    const decorationMenuRef = ref();
+    const menuTop = ref(0);
+    const clickDecoration = () => {
+      const viewportHeight = window.innerHeight;
+      const wrapperTop = decorationWrapperRef.value.getBoundingClientRect().top;
+      const menuHeight = 8 * 2 + 30 * 4;
+      // 防止超出下边界
+      menuTop.value = Math.min(0, viewportHeight - wrapperTop - menuHeight);
+      isShowMenu.value = true;
+    };
     let timer = null;
     const showMenu = (newVal) => {
       clearTimeout(timer);
@@ -74,6 +85,10 @@ export default {
       statusType,
       statusStyle,
       isShowMenu,
+      decorationWrapperRef,
+      decorationMenuRef,
+      menuTop,
+      clickDecoration,
       showMenu,
       handleMenuSelect,
     }
@@ -88,7 +103,6 @@ export default {
 
 .kk-menu {
   position: absolute;
-  top: 0;
   left: 16px;
   z-index: 3466;
   text-align: left;

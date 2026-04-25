@@ -15,6 +15,7 @@ import {
   CircleCloseFilled,
   InfoFilled,
 } from "@element-plus/icons-vue";
+import { CmdCodeStatusEnum } from "@/components/cmdcode/CmdCode";
 
 export default {
   name: 'CmdCodeStatus',
@@ -36,17 +37,10 @@ export default {
   },
   setup(props) {
 
-    const statusTypeDict = {
-      'Compile Error': -2,
-      'Execute Interrupt': -1,
-      'Not Active': 0,
-      'Execute Success': 1,
-    };
-
     const statusColor = ['#f56c6c', '#e6a23c', '#909399', '#67c23a'];
 
     const statusType = computed(() => {
-      return statusTypeDict[props.status] || 0;
+      return CmdCodeStatusEnum[props.status].type || 0;
     });
 
     const statusStyle = computed(() => {

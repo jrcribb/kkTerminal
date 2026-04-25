@@ -185,22 +185,33 @@ export const UserCmdCodeExecutor = {
         },
     },
     // 写入后等待
-    async write(content, time = 200) {
-        content = content.toString();
-        if(!content) content = '\n';
-        else if(!content.endsWith('\n') && !content.endsWith('\r')) content += '\n';
-        UserCmdCodeHelper.cnt = UserCmdCodeHelper.outArray.length;
-        UserCmdCodeHelper.writeNoAwait(content, true);
-        await new Promise(resolve => browser.setTimeout(resolve, Math.max(200, time)));
-        return this.read();
+    async write(content, timeout = 3000) {
+        return new Promise((resolve, reject) => {
+            if(content === null || content === undefined) content = '';
+            content = content.toString();
+            if(!content.endsWith('\n') && !content.endsWith('\r')) content += '\n';
+            const timer = browser.setTimeout(() => {
+                UserCmdCodeHelper.resolve = null;
+                UserCmdCodeHelper.outputs.push([]);
+                reject();
+            }, timeout);
+            UserCmdCodeHelper.resolve = (output) => {
+                clearTimeout(timer);
+                UserCmdCodeHelper.resolve = null;
+                UserCmdCodeHelper.outputs.push(output);
+                resolve(output);
+            };
+            UserCmdCodeHelper.writeNoAwait(content, true);
+        });
     },
     // 读取输出
-    read() {
-        return filter(UserCmdCodeHelper.outArray.slice(UserCmdCodeHelper.cnt));
+    read(index = -1) {
+        const len = UserCmdCodeHelper.outputs.length;
+        return UserCmdCodeHelper.outputs[(index + len) % len] || [];
     },
     // 读取全部输出
     readAll() {
-        return filter(UserCmdCodeHelper.outArray.slice(0));
+        return UserCmdCodeHelper.outputs.slice(0);
     },
     // 隐藏
     hide() {
@@ -215,8 +226,8 @@ export const UserCmdCodeHelper = {
     name: '',
     active: false,
     display: true,
-    outArray: [],
-    cnt: 0,
+    outputs: [],
+    resolve: null,
     fileBlockRef: null,
     writeNoAwait: null,
     parsePath(path) {
@@ -230,46 +241,26 @@ export const UserCmdCodeHelper = {
         this.name = '';
         this.active = false;
         this.display = true;
-        this.outArray = [];
-        this.cnt = 0;
+        this.outputs = [];
+        this.resolve = null;
     },
 };
 
 const CmdCodeReservedVarsDict = {
     'option': 'CONNECT_OPTION',
-    'home': 'HOME_PATH',
-    'dir': 'CURRENT_DIR',
+    'home': 'HOME_DIRECTORY',
+    'fdir': 'FILE_DIRECTORY',
+    'wdir': 'WORK_DIRECTORY',
 };
-export const CmdCodeReservedVarsSetter = (key, val) => {
-    UserCmdCodeExecutor.var.session(CmdCodeReservedVarsDict[key], val);
-};
-
-// 处理过滤输出
-const filter = (arr) => {
-    const ret = [];
-    const tmp = filterRN(arr);
-    for(let i = 0; i < tmp.length; i++) {
-        const str = filterANSI(tmp[i]);
-        if(str) ret.push(str);
-    }
-    return ret;
-};
-// 以 \r\n 分割
-const filterRN = (arr) => {
-    const ret = [];
-    for(let i = 0; i < arr.length; i++) {
-        const tmp = arr[i].split("\r\n");
-        for(let j = 0; j < tmp.length; j++) {
-            if (tmp[j]) ret.push(tmp[j]);
+export const CmdCodeReservedVarsHelper = {
+    set(key, val) {
+        UserCmdCodeExecutor.var.session(CmdCodeReservedVarsDict[key], val);
+    },
+    clean() {
+        for(const key in CmdCodeReservedVarsDict) {
+            browser.sessionStorage.removeItem(storageSessionPrefix + CmdCodeReservedVarsDict[key]);
         }
-    }
-    return ret;
-};
-// 过滤 ANSI 等终端字符
-import stripAnsi from "strip-ansi";
-const filterANSI = (str) => {
-    // eslint-disable-next-line no-control-regex
-    return stripAnsi(str).replace(/[\x00-\x1F\x7F]/g, '');
+    },
 };
 
 // 用户命令代码状态枚举
@@ -278,10 +269,10 @@ const filterANSI = (str) => {
 // Inactive-未被使用: Not Active
 // Success-执行成功: Execute Success
 export const CmdCodeStatusEnum = {
-    'Compile Error': 'Error',
-    'Execute Interrupt': 'Interrupted',
-    'Not Active': 'Inactive',
-    'Execute Success': 'Success',
+    'Compile Error': { type: -2, desc: 'Error' },
+    'Execute Interrupt': { type: -1, desc: 'Interrupted' },
+    'Not Active': { type: 0, desc: 'Inactive' },
+    'Execute Success': { type: 1, desc: 'Success' },
 };
 
 // 编辑器添加kkTerminal智能提示
